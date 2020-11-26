@@ -47,7 +47,7 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
             dirname = os.path.dirname(code_output_path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            with open(code_output_path, 'wb') as src_out:
+            with open(code_output_path, 'w') as src_out:
                 src_out.write(transformer.transform_source())
 
         if standalone_output_path:

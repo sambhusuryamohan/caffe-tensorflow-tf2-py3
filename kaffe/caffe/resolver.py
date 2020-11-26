@@ -22,6 +22,7 @@ class CaffeResolver(object):
             # This way, Caffe variants with custom layers will work.
             self.caffepb = self.caffe.proto.caffe_pb2
         self.NetParameter = self.caffepb.NetParameter
+        print(dir(self.NetParameter))
 
     def has_pycaffe(self):
         return self.caffe is not None

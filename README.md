@@ -1,3 +1,12 @@
+## Prerequisistes 
+Install caffe 
+For Ubuntu
+```bash
+apt install caffe-cpu
+apt install python3-caffe-cpu
+pip3 install --upgrade scikit-image
+```
+
 # Caffe to TensorFlow
 
 Convert [Caffe](https://github.com/BVLC/caffe/) models to [TensorFlow](https://github.com/tensorflow/tensorflow).
