@@ -72,11 +72,22 @@ class DataInjector(object):
         # potential for future issues.
         # The Caffe-backend does not suffer from this problem.
         data = list(data)
+        #print([np.array(x).shape for x in data])
         squeeze_indices = [1]  # Squeeze biases.
         if node.kind == NodeKind.InnerProduct:
             squeeze_indices.append(0)  # Squeeze FC.
+        if node.kind == NodeKind.PReLU:
+            squeeze_indices.pop()
+            squeeze_indices.append(0)
+        if node.kind == NodeKind.BatchNorm:
+            squeeze_indices.append(0)
+            squeeze_indices.append(2)
+        if node.kind == NodeKind.Scale:
+            squeeze_indices.append(0)
+
         for idx in squeeze_indices:
             data[idx] = np.squeeze(data[idx])
+        #print([np.array(x).shape for x in data])
         return data
 
     def __call__(self, graph):
@@ -282,6 +293,8 @@ class ParameterNamer(object):
                 names = ('mean', 'variance')
                 if len(node.data) == 4:
                     names += ('scale', 'offset')
+            elif node.kind == NodeKind.PReLU:
+                names = ('alpha',)
             else:
                 print_stderr('WARNING: Unhandled parameters: {}'.format(node.kind))
                 continue

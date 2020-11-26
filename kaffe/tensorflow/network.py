@@ -56,12 +56,14 @@ class Network(object):
         session: The current TensorFlow session
         ignore_missing: If true, serialized weights for missing layers are ignored.
         '''
-        data_dict = np.load(data_path).item()
+        data_dict = np.load(data_path, allow_pickle=True).item()
         for op_name in data_dict:
             with tf.variable_scope(op_name, reuse=True):
                 for param_name, data in data_dict[op_name].iteritems():
                     try:
                         var = tf.get_variable(param_name)
+                        #print param_name, var
+                        #print data
                         session.run(var.assign(data))
                     except ValueError:
                         if not ignore_missing:
@@ -123,7 +125,8 @@ class Network(object):
         assert c_o % group == 0
         # Convolution for a given input and kernel
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
-        with tf.variable_scope(name) as scope:
+        scope_name = name[1:] if name[0] == '_' else name 
+        with tf.variable_scope(scope_name) as scope:
             kernel = self.make_var('weights', shape=[k_h, k_w, c_i / group, c_o])
             if group == 1:
                 # This is the common-case. Convolve the input without any further complications.
@@ -147,6 +150,16 @@ class Network(object):
     @layer
     def relu(self, input, name):
         return tf.nn.relu(input, name=name)
+
+    @layer
+    def prelu(self, input, name):
+        with tf.variable_scope(name):
+            i = input.get_shape().as_list()
+            alpha = self.make_var('alpha', shape=(i[-1]))
+            output = tf.maximum(0.0, input) + tf.minimum(0.0, input)*alpha 
+            #output = tf.nn.relu(input) + tf.multiply(tf.ones(i[0:-1]+[1]) * alpha, -tf.nn.relu(-input))
+            #output = tf.nn.relu(input) + tf.mul(tf.ones((i[0],i[1],i[2],1)) * alpha, -tf.nn.relu(-input))
+        return output
 
     @layer
     def max_pool(self, input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
@@ -181,11 +194,13 @@ class Network(object):
 
     @layer
     def add(self, inputs, name):
-        return tf.add_n(inputs, name=name)
+        scope_name = name[1:] if name[0] == '_' else name
+        return tf.add_n(inputs, name=scope_name)
 
     @layer
     def fc(self, input, num_out, name, relu=True):
-        with tf.variable_scope(name) as scope:
+        scope_name = name[1:] if name[0] == '_' else name
+        with tf.variable_scope(scope_name) as scope:
             input_shape = input.get_shape()
             if input_shape.ndims == 4:
                 # The input is spatial. Vectorize it first.
@@ -199,6 +214,7 @@ class Network(object):
             biases = self.make_var('biases', [num_out])
             op = tf.nn.relu_layer if relu else tf.nn.xw_plus_b
             fc = op(feed_in, weights, biases, name=scope.name)
+            print "fc scope:", scope.name
             return fc
 
     @layer
@@ -217,7 +233,8 @@ class Network(object):
     @layer
     def batch_normalization(self, input, name, scale_offset=True, relu=False):
         # NOTE: Currently, only inference is supported
-        with tf.variable_scope(name) as scope:
+        scope_name = name[1:] if name[0] == '_' else name
+        with tf.variable_scope(scope_name) as scope:
             shape = [input.get_shape()[-1]]
             if scale_offset:
                 scale = self.make_var('scale', shape=shape)
