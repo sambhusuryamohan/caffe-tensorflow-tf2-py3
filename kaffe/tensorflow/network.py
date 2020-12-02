@@ -31,7 +31,7 @@ def layer(op):
 
 class Network(object):
 
-    def __init__(self, inputs, trainable=True):
+    def __init__(self, inputs, output_node_names, trainable=True):
         # The input nodes for this network
         self.inputs = inputs
         # The current list of terminal nodes
@@ -42,8 +42,12 @@ class Network(object):
         self.trainable = trainable
         # Switch variable for dropout
         self.setup()
-        self.model = tf.keras.models.Model(inputs=[inputs['data']], outputs=[self.terminals[-1]])
+        output_layers = []
+        for output_name in output_node_names: 
+            output_layers.append(self.layers[output_name])
+        self.model = tf.keras.models.Model(inputs=[inputs['data']], outputs=output_layers)
         self.model.trainable=False
+        self.model.summary()
 
 
     def save(self, saved_model_path): 

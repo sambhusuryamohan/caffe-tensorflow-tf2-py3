@@ -86,7 +86,8 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
             
             #data_placeholder = tf.placeholder(tf.float32, tensor_shape_list, name=input_node)
             data_placeholder = tf.keras.Input(shape=tensor_shape_list)
-            net = KaffeNet({input_node: data_placeholder})
+            output_node_names = output_node.split(',')
+            net = KaffeNet({input_node: data_placeholder}, output_node_names)
             net.load(data_output_path)
             net.save(standalone_output_path)
 
