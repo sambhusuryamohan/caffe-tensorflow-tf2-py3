@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from .param_loader import ParamLoaderFactory
 
 DEFAULT_PADDING = 'SAME'
 
@@ -28,7 +29,6 @@ def layer(op):
 
     return layer_decorated
 
-
 class Network(object):
 
     def __init__(self, inputs, trainable=True):
@@ -41,16 +41,28 @@ class Network(object):
         # If true, the resulting variables are set as trainable
         self.trainable = trainable
         # Switch variable for dropout
-        self.use_dropout = tf.placeholder_with_default(tf.constant(1.0),
-                                                       shape=[],
-                                                       name='use_dropout')
         self.setup()
+        self.model = tf.keras.models.Model(inputs=[inputs['data']], outputs=[self.terminals[-1]])
+        self.model.trainable=False
+
+
+    def save(self, saved_model_path): 
+        self.model.save(saved_model_path)
+        self.model.summary()
+
 
     def setup(self):
         '''Construct the network. '''
         raise NotImplementedError('Must be implemented by the subclass.')
 
-    def load(self, data_path, session, ignore_missing=False):
+
+    def load_parameter(self, layer, param_name, data):
+        #print('layer weights', layer.non_trainable_variables)
+        param_loader = ParamLoaderFactory.create(layer)
+        param_loader.load(param_name, data)
+
+        
+    def load(self, data_path, ignore_missing=False):
         '''Load network weights.
         data_path: The path to the numpy-serialized network weights
         session: The current TensorFlow session
@@ -58,16 +70,17 @@ class Network(object):
         '''
         data_dict = np.load(data_path, allow_pickle=True).item()
         for op_name in data_dict:
-            with tf.variable_scope(op_name, reuse=True):
-                for param_name, data in data_dict[op_name].items():
-                    try:
-                        var = tf.get_variable(param_name)
-                        #print param_name, var
-                        #print data
-                        session.run(var.assign(data))
-                    except ValueError:
-                        if not ignore_missing:
-                            raise
+            layer = self.model.get_layer(name=op_name)
+            #print("##############{}############", op_name)
+            for param_name, data in data_dict[op_name].items():
+                #print('caffe data', op_name, param_name, data)
+                try:
+                    #print("before loading", layer.__dict__)
+                    self.load_parameter(layer, param_name, data)
+                    #print("after loading", layer.__dict__)
+                except ValueError:
+                    if not ignore_missing:
+                        raise
 
     def feed(self, *args):
         '''Set the input(s) for the next operation by replacing the terminal nodes.
@@ -95,10 +108,6 @@ class Network(object):
         ident = sum(t.startswith(prefix) for t, _ in self.layers.items()) + 1
         return '%s_%d' % (prefix, ident)
 
-    def make_var(self, name, shape):
-        '''Creates a new TensorFlow variable.'''
-        return tf.get_variable(name, shape, trainable=self.trainable)
-
     def validate_padding(self, padding):
         '''Verifies that the padding is one of the supported ones.'''
         assert padding in ('SAME', 'VALID')
@@ -119,65 +128,50 @@ class Network(object):
         # Verify that the padding is acceptable
         self.validate_padding(padding)
         # Get the number of channels in the input
-        c_i = input.get_shape()[-1]
+        c_i = input.shape[-1]
         # Verify that the grouping parameter is valid
         assert c_i % group == 0
         assert c_o % group == 0
         # Convolution for a given input and kernel
-        convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         scope_name = name[1:] if name[0] == '_' else name 
-        with tf.variable_scope(scope_name) as scope:
-            kernel = self.make_var('weights', shape=[k_h, k_w, int(c_i) / group, c_o])
+        activation = None
+        if relu:
+            activation = 'relu'
+        with tf.name_scope(scope_name) as scope:
             if group == 1:
-                # This is the common-case. Convolve the input without any further complications.
-                output = convolve(input, kernel)
+                output = tf.keras.layers.Conv2D(c_o, kernel_size=(k_h, k_w), strides=(s_h, s_w), padding=padding, use_bias=biased, activation=activation, name=name)(input)
+
             else:
-                # Split the input into groups and then convolve each of them independently
-                input_groups = tf.split(input,group, 3)
-                kernel_groups = tf.split(kernel, group, 3)
-                output_groups = [convolve(i, k) for i, k in zip(input_groups, kernel_groups)]
-                # Concatenate the groups
-                output = tf.concat(output_groups, 3)
-            # Add the biases
-            if biased:
-                biases = self.make_var('biases', [c_o])
-                output = tf.nn.bias_add(output, biases)
-            if relu:
-                # ReLU non-linearity
-                output = tf.nn.relu(output, name=scope.name)
+                output = tf.keras.layers.DepthwiseConv2D(kernel_size=(k_h, k_w), strides=(s_h, s_w), padding=padding, use_bias=biased, activation=activation, name=name)(input)
             return output
 
     @layer
     def relu(self, input, name):
-        return tf.nn.relu(input, name=name)
+        return tf.keras.layers.ReLU(name=name)(input)
 
     @layer
     def prelu(self, input, name):
-        with tf.variable_scope(name):
-            i = input.get_shape().as_list()
-            alpha = self.make_var('alpha', shape=(i[-1]))
-            output = tf.maximum(0.0, input) + tf.minimum(0.0, input)*alpha 
-            #output = tf.nn.relu(input) + tf.multiply(tf.ones(i[0:-1]+[1]) * alpha, -tf.nn.relu(-input))
-            #output = tf.nn.relu(input) + tf.mul(tf.ones((i[0],i[1],i[2],1)) * alpha, -tf.nn.relu(-input))
+        with tf.name_scope(name):
+            output = tf.keras.layers.PReLU(name=name)(input)
         return output
 
     @layer
     def max_pool(self, input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
         self.validate_padding(padding)
-        return tf.nn.max_pool(input,
-                              ksize=[1, k_h, k_w, 1],
-                              strides=[1, s_h, s_w, 1],
+        return tf.keras.layers.MaxPooling2D(
+                              pool_size=(k_h, k_w),
+                              strides=(s_h, s_w),
                               padding=padding,
-                              name=name)
+                              name=name)(input)
 
     @layer
     def avg_pool(self, input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
         self.validate_padding(padding)
-        return tf.nn.avg_pool(input,
-                              ksize=[1, k_h, k_w, 1],
-                              strides=[1, s_h, s_w, 1],
+        return tf.keras.layers.AveragePooling2D(
+                              pool_size=(k_h, k_w),
+                              strides=(s_h, s_w),
                               padding=padding,
-                              name=name)
+                              name=name)(input)
 
     @layer
     def lrn(self, input, radius, alpha, beta, name, bias=1.0):
@@ -190,72 +184,38 @@ class Network(object):
 
     @layer
     def concat(self, inputs, axis, name):
-        return tf.concat(values=inputs, axis=axis,  name=name)
+        return tf.keras.layers.Concatenate(axis=axis,  name=name)(inputs)
 
     @layer
     def add(self, inputs, name):
         scope_name = name[1:] if name[0] == '_' else name
-        return tf.add_n(inputs, name=scope_name)
+        return tf.keras.layers.Add(name = scope_name)(inputs)
 
     @layer
     def fc(self, input, num_out, name, relu=True):
         scope_name = name[1:] if name[0] == '_' else name
-        with tf.variable_scope(scope_name) as scope:
-            input_shape = input.get_shape()
-            if input_shape.ndims == 4:
-                # The input is spatial. Vectorize it first.
-                dim = 1
-                for d in input_shape[1:].as_list():
-                    dim *= d
-                feed_in = tf.reshape(input, [-1, dim])
-            else:
-                feed_in, dim = (input, input_shape[-1].value)
-            weights = self.make_var('weights', shape=[dim, num_out])
-            biases = self.make_var('biases', [num_out])
-            op = tf.nn.relu_layer if relu else tf.nn.xw_plus_b
-            fc = op(feed_in, weights, biases, name=scope.name)
-            print ("fc scope:", scope.name)
+        activation = None
+        with tf.name_scope(scope_name) as scope:
+            if relu:
+                activation = 'relu'
+            flatten = tf.keras.layers.Flatten(name='flatten_'+name)(input)
+            fc = tf.keras.layers.Dense(num_out, activation=activation, name=name)(flatten)
             return fc
 
     @layer
     def softmax(self, input, name):
-        input_shape = [v.value for v in input.get_shape()]
-        if len(input_shape) > 2:
-            # For certain models (like NiN), the singleton spatial dimensions
-            # need to be explicitly squeezed, since they're not broadcast-able
-            # in TensorFlow's NHWC ordering (unlike Caffe's NCHW).
-            if input_shape[1] == 1 and input_shape[2] == 1:
-                input = tf.squeeze(input, squeeze_dims=[1, 2])
-            else:
-                raise ValueError('Rank 2 tensor input expected for softmax!')
-        return tf.nn.softmax(input, name=name)
+        return tf.keras.layers.Softmax(name=name)(input)
 
     @layer
     def batch_normalization(self, input, name, scale_offset=True, relu=False):
-        # NOTE: Currently, only inference is supported
         scope_name = name[1:] if name[0] == '_' else name
-        with tf.variable_scope(scope_name) as scope:
-            shape = [input.get_shape()[-1]]
-            if scale_offset:
-                scale = self.make_var('scale', shape=shape)
-                offset = self.make_var('offset', shape=shape)
-            else:
-                scale, offset = (None, None)
-            output = tf.nn.batch_normalization(
-                input,
-                mean=self.make_var('mean', shape=shape),
-                variance=self.make_var('variance', shape=shape),
-                offset=offset,
-                scale=scale,
-                # TODO: This is the default Caffe batch norm eps
-                # Get the actual eps from parameters
-                variance_epsilon=1e-5,
-                name=name)
-            if relu:
-                output = tf.nn.relu(output)
+        with tf.name_scope(scope_name) as scope:
+            output = tf.keras.layers.BatchNormalization(
+                scale=True,
+                epsilon=1e-5,
+                name=name)(input)
             return output
 
     @layer
     def dropout(self, input, keep_prob, name):
-        keep = 1 - self.use_dropout + (self.use_dropout * keep_prob)
-        return tf.nn.dropout(input, keep, name=name)
+        return tf.keras.layers.Dropout(keep, name=name)(input)

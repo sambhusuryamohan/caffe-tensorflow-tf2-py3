@@ -27,9 +27,10 @@ def validate_arguments(args):
         fatal_error('No output path specified.')
 
 
-def convert(def_path, caffemodel_path, data_output_path, code_output_path, standalone_output_path, phase):
+def convert(def_path, caffemodel_path, data_output_path, code_output_path, standalone_output_path, phase,
+            input_node, output_node):
     try:
-        sess = tf.InteractiveSession()
+        #sess = tf.InteractiveSession()
         transformer = TensorFlowTransformer(def_path, caffemodel_path, phase=phase)
         print_stderr('Converting data...')
         if data_output_path is not None:
@@ -52,7 +53,7 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
 
         if standalone_output_path:
             filename, _ = os.path.splitext(os.path.basename(standalone_output_path))
-            temp_folder = os.path.join(os.path.dirname(standalone_output_path), 'tmp2')
+            temp_folder = os.path.join(os.path.dirname(standalone_output_path), 'tmp')
             if not os.path.exists(temp_folder):
                 os.makedirs(temp_folder)
 
@@ -70,24 +71,27 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
                     src_out.write(transformer.transform_source())
 
             checkpoint_path = os.path.join(temp_folder, filename + '.ckpt')
-            graph_name = os.path.basename(standalone_output_path)
-            graph_folder = os.path.dirname(standalone_output_path)
-            input_node = transformer.graph.nodes[0].name
-            output_node = "fc1/fc1/add_1"#TRANSFORmer.graph.nodes[-1].name
+            #graph_name = os.path.basename(standalone_output_path)
+            #graph_folder = os.path.dirname(standalone_output_path)
+            #input_node = transformer.graph.nodes[0].name
+            #output_node = "fc1/fc1/add_1"#TRANSFORmer.graph.nodes[-1].name
             tensor_shape = transformer.graph.get_node(input_node).output_shape
-            tensor_shape_list = [tensor_shape.batch_size, tensor_shape.height, tensor_shape.width, tensor_shape.channels]
+            tensor_shape_list = [tensor_shape.height, tensor_shape.width, tensor_shape.channels]
 
             sys.path.append(os.path.dirname(code_output_path))
             module = os.path.splitext(os.path.basename(code_output_path))[0]
             class_name = transformer.graph.name
             KaffeNet = getattr(__import__(module), class_name)
 
-            data_placeholder = tf.placeholder(tf.float32, tensor_shape_list, name=input_node)
+            
+            #data_placeholder = tf.placeholder(tf.float32, tensor_shape_list, name=input_node)
+            data_placeholder = tf.keras.Input(shape=tensor_shape_list)
             net = KaffeNet({input_node: data_placeholder})
+            net.load(data_output_path)
+            net.save(standalone_output_path)
 
             # load weights stored in numpy format
-            net.load(data_output_path, sess)
-
+            '''
             print_stderr('Saving checkpoint...')
             saver = tf.train.Saver()
             saver.save(sess, checkpoint_path)
@@ -118,7 +122,7 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
                          clear_devices, '')
             optimize_graph(output_graph_path, input_node, output_node_names)
             #shutil.rmtree(temp_folder)
-
+            '''
         print_stderr('Done.')
     except KaffeError as err:
         fatal_error('Error encountered: {}'.format(err))
@@ -131,6 +135,8 @@ def main():
     parser.add_argument('--data-output-path', help='Converted data output path')
     parser.add_argument('--code-output-path', help='Save generated source to this path')
     parser.add_argument('--standalone-output-path', help='Save generated standalone tensorflow model to this path')
+    parser.add_argument('--output_node', help='output node of the graph')
+    parser.add_argument('--input_node', help='input node of the graph')
     parser.add_argument('-p',
                         '--phase',
                         default='test',
@@ -138,7 +144,7 @@ def main():
     args = parser.parse_args()
     validate_arguments(args)
     convert(args.def_path, args.caffemodel, args.data_output_path, args.code_output_path,
-            args.standalone_output_path, args.phase)
+            args.standalone_output_path, args.phase, args.input_node, args.output_node)
 
 
 if __name__ == '__main__':
