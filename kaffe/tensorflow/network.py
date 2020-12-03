@@ -222,4 +222,4 @@ class Network(object):
 
     @layer
     def dropout(self, input, keep_prob, name):
-        return tf.keras.layers.Dropout(keep, name=name)(input)
+        return tf.keras.layers.Dropout(keep_prob, name=name)(input)
