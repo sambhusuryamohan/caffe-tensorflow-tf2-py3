@@ -171,12 +171,14 @@ class Network(object):
         return output
 
     @layer
-    def max_pool(self, input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
-        self.validate_padding(padding)
+    def max_pool(self, input, k_h, k_w, s_h, s_w, name, padding=None):
+        #self.validate_padding(padding)
+        if padding != None: 
+            input = tf.keras.layers.ZeroPadding2D(padding=padding)(input)
         return tf.keras.layers.MaxPooling2D(
                               pool_size=(k_h, k_w),
                               strides=(s_h, s_w),
-                              padding=padding,
+                              padding='VALID',
                               name=name)(input)
 
     @layer
