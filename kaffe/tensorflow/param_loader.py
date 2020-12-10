@@ -23,9 +23,16 @@ class ConvParameter:
         self.layer = layer
 
     def load(self, param_name, data):
+        #print('conv', self.layer)
         if param_name == 'weights':
+            #shape = self.layer.kernel.shape
+            #print('shape', shape)
+            #data = data.transpose((1, 2, 0, 3))
             self.layer.kernel.assign(data)
         elif param_name == 'biases':
+            #shape = self.layer.bias.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.bias.assign(data)
         else:
             raise ValueError('Conv parameter not identified {}'.format(param_name))
@@ -37,12 +44,24 @@ class BNParameter:
 
     def load(self, param_name, data):
         if param_name == 'scale':
+            #shape = self.layer.gamma.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.gamma.assign(data)
         elif param_name == 'offset':
+            #shape = self.layer.beta.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.beta.assign(data)
         elif param_name == 'mean':
+            #shape = self.layer.moving_mean.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.moving_mean.assign(data)
         elif param_name == 'variance':
+            #shape = self.layer.moving_variance.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.moving_variance.assign(data)
         else:
             raise ValueError('BN parameter not identified {}'.format(param_name))
@@ -54,7 +73,10 @@ class PReLUParameter:
 
     def load(self, param_name, data):
         if param_name == 'alpha':
-            self.layer.alpha.assign(np.broadcast_to(data, self.layer.alpha.shape))
+            shape = self.layer.alpha.shape
+            #print('shape', shape)
+            data = np.broadcast_to(data, shape)
+            self.layer.alpha.assign(data)
         else:
             raise ValueError('PReLU parameter not identified {}'.format(param_name))
 
@@ -64,8 +86,14 @@ class DenseParameter:
 
     def load(self, param_name, data):
         if param_name == 'weights':
+            #shape = self.layer.kernel.shape
+            #print('shape', shape)
+            #data = data.transpose((1, 0)).reshape(shape)
             self.layer.kernel.assign(data)
         elif param_name == 'biases':
+            #shape = self.layer.bias.shape
+            #print('shape', shape)
+            #data = data.reshape(shape)
             self.layer.bias.assign(data)
         else:
             raise ValueError('Dense parameter not identified |{}|'.format(param_name))

@@ -51,6 +51,8 @@ class Network(object):
 
 
     def save(self, saved_model_path): 
+        #for i, layer in enumerate(self.model.layers):
+        #    print('layer {} weights: {}'.format(i, layer.weights))
         self.model.save(saved_model_path)
         self.model.summary()
 
@@ -77,7 +79,7 @@ class Network(object):
             layer = self.model.get_layer(name=op_name)
             #print("##############{}############", op_name)
             for param_name, data in data_dict[op_name].items():
-                #print('caffe data', op_name, param_name, data)
+                #print('caffe data', op_name, param_name, np.array(data))
                 try:
                     #print("before loading", layer.__dict__)
                     self.load_parameter(layer, param_name, data)
@@ -85,6 +87,10 @@ class Network(object):
                 except ValueError:
                     if not ignore_missing:
                         raise
+        data_dict = np.load(data_path, allow_pickle=True).item()
+        #for op_name in data_dict:
+        #    for param_name, data in data_dict[op_name].items():
+        #        print('all caffe data', op_name, param_name, data)
 
     def feed(self, *args):
         '''Set the input(s) for the next operation by replacing the terminal nodes.
@@ -126,11 +132,11 @@ class Network(object):
              s_w,
              name,
              relu=True,
-             padding=DEFAULT_PADDING,
+             padding=None,
              group=1,
              biased=True):
         # Verify that the padding is acceptable
-        self.validate_padding(padding)
+        #self.validate_padding(padding)'
         # Get the number of channels in the input
         c_i = input.shape[-1]
         # Verify that the grouping parameter is valid
@@ -142,10 +148,15 @@ class Network(object):
         if relu:
             activation = 'relu'
         with tf.name_scope(scope_name) as scope:
+            #print('conv', scope_name, name, group, k_h, k_w, s_h, s_w, padding, biased, activation)
+            if padding != None: 
+                input = tf.keras.layers.ZeroPadding2D(padding=padding)(input)
+            padding = 'VALID'
             if group == 1:
-                output = tf.keras.layers.Conv2D(c_o, kernel_size=(k_h, k_w), strides=(s_h, s_w), padding=padding, use_bias=biased, activation=activation, name=name)(input)
+                output = tf.keras.layers.Conv2D(c_o, kernel_size=(k_h, k_w), strides=(s_h, s_w), use_bias=biased, padding=padding, activation=activation, name=name)(input)
 
             else:
+                #print('depthconv', scope_name, name, group, k_h, k_w, s_h, s_w, padding, biased, activation)
                 output = tf.keras.layers.DepthwiseConv2D(kernel_size=(k_h, k_w), strides=(s_h, s_w), padding=padding, use_bias=biased, activation=activation, name=name)(input)
             return output
 
@@ -179,6 +190,7 @@ class Network(object):
 
     @layer
     def lrn(self, input, radius, alpha, beta, name, bias=1.0):
+        raise NotImplementedError("LRN not implemented")
         return tf.nn.local_response_normalization(input,
                                                   depth_radius=radius,
                                                   alpha=alpha,

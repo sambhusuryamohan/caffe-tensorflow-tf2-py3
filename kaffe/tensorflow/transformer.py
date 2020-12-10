@@ -17,6 +17,7 @@ def get_padding_type(kernel_params, input_shape, output_shape):
     how the padding edge-cases are handled. These are described here:
     https://github.com/Yangqing/caffe2/blob/master/caffe2/proto/caffe2_legacy.proto
     '''
+    '''
     k_h, k_w, s_h, s_w, p_h, p_w = kernel_params
     s_o_h = np.ceil(input_shape.height / float(s_h))
     s_o_w = np.ceil(input_shape.width / float(s_w))
@@ -26,7 +27,38 @@ def get_padding_type(kernel_params, input_shape, output_shape):
     v_o_w = np.ceil((input_shape.width - k_w + 1.0) / float(s_w))
     if (output_shape.height == v_o_h) and (output_shape.width == v_o_w):
         return 'VALID'
-    return None
+    '''
+    k_h, k_w, s_h, s_w, p_h, p_w = kernel_params
+    if k_h == 1:
+        assert k_w == 1, 'kernel size different change padding implementation'
+        return None 
+
+    pad_h = (output_shape.height - 1)*s_h - input_shape.height + k_h; 
+    pad_w = (output_shape.width - 1)*s_w - input_shape.width + k_w; 
+    pad_top_bottom = None
+    pad_left_right = None
+    if pad_h != 0:
+        if int(pad_h/2) == 0:
+            pad_top_bottom = (1, 0)
+        else:
+            pad_top_bottom = (1, 1)
+    if pad_w != 0:
+        if int(pad_w/2) == 0 :
+            pad_left_right = (1, 0)
+        else:
+            pad_left_right = (1, 1)
+    
+    if pad_top_bottom == None and pad_left_right == None:
+        return None
+    else: 
+        if pad_top_bottom == None:
+            pad_top_bottom = (0, 0)
+        elif pad_left_right == None: 
+            pad_left_right = (0, 0)
+
+    padding = (pad_top_bottom, pad_left_right)
+    #print('Calculated padding', p_h, p_w, padding)
+    return padding 
 
 
 class TensorFlowNode(object):
@@ -69,9 +101,11 @@ class MaybeActivated(object):
         self.inject_kwargs = {}
         if node.metadata.get('relu', False) != default:
             self.inject_kwargs['relu'] = not default
+            #print("Inject relu", default)
 
     def __call__(self, *args, **kwargs):
         kwargs.update(self.inject_kwargs)
+        #print("maybe activated kwargs", kwargs)
         return TensorFlowNode(*args, **kwargs)
 
 
@@ -82,7 +116,7 @@ class TensorFlowMapper(NodeMapper):
         input_shape = node.get_only_parent().output_shape
         padding = get_padding_type(kernel_params, input_shape, node.output_shape)
         # Only emit the padding if it's not the default value.
-        padding = {'padding': padding} if padding != network.DEFAULT_PADDING else {}
+        padding = {'padding': padding}
         return (kernel_params, padding)
 
     def map_convolution(self, node):
@@ -98,6 +132,7 @@ class TensorFlowMapper(NodeMapper):
             kwargs['biased'] = False
         assert kernel_params.kernel_h == h
         assert kernel_params.kernel_w == w
+        #print('conv parameters', kernel_params, node.get_only_parent().output_shape, node.output_shape, kwargs)
         return MaybeActivated(node)('conv', kernel_params.kernel_h, kernel_params.kernel_w, c_o,
                                     kernel_params.stride_h, kernel_params.stride_w, **kwargs)
 
