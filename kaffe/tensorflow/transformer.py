@@ -38,15 +38,11 @@ def get_padding_type(kernel_params, input_shape, output_shape):
     pad_top_bottom = None
     pad_left_right = None
     if pad_h != 0:
-        if int(pad_h/2) == 0:
-            pad_top_bottom = (1, 0)
-        else:
-            pad_top_bottom = (1, 1)
+        bottom_pad = int(pad_h/2)
+        pad_top_bottom = (pad_h - bottom_pad, bottom_pad)
     if pad_w != 0:
-        if int(pad_w/2) == 0 :
-            pad_left_right = (1, 0)
-        else:
-            pad_left_right = (1, 1)
+        right_pad = int(pad_w/2)
+        pad_left_right = (pad_w - right_pad, right_pad)
     
     if pad_top_bottom == None and pad_left_right == None:
         return None
@@ -57,7 +53,7 @@ def get_padding_type(kernel_params, input_shape, output_shape):
             pad_left_right = (0, 0)
 
     padding = (pad_top_bottom, pad_left_right)
-    #print('Calculated padding', p_h, p_w, padding)
+    #print('Calculated padding', p_h, p_w, padding, input_shape, output_shape)
     return padding 
 
 
