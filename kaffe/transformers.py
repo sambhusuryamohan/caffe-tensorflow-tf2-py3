@@ -295,6 +295,8 @@ class ParameterNamer(object):
                     names += ('scale', 'offset')
             elif node.kind == NodeKind.PReLU:
                 names = ('alpha',)
+            #elif node.kind == NodeKind.Permute:
+            #    names = ('permute_param',)
             else:
                 print_stderr('WARNING: Unhandled parameters: {}'.format(node.kind))
                 continue

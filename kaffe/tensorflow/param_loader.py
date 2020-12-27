@@ -5,8 +5,13 @@ class ParamLoaderFactory:
     @staticmethod
     def create(layer):
         #print("Get Layer", layer.name, type(layer))
+
         if isinstance(layer, tf.keras.layers.Conv2D):
-            return ConvParameter(layer)
+            if isinstance(layer, tf.keras.layers.DepthwiseConv2D):
+                params = DWParameter(layer)
+            else: 
+                params = ConvParameter(layer)
+            return params
         elif isinstance(layer, tf.keras.layers.BatchNormalization):
             return BNParameter(layer)
         elif isinstance(layer, tf.keras.layers.PReLU):
@@ -36,6 +41,25 @@ class ConvParameter:
             self.layer.bias.assign(data)
         else:
             raise ValueError('Conv parameter not identified {}'.format(param_name))
+
+class DWParameter:
+   def __init__(self, layer):
+       self.layer = layer
+
+   def load(self, param_name, data):
+       #print('conv', self.layer, data.shape)
+       if param_name == 'weights':
+           #shape = self.layer.kernel.shape
+           #print('shape', shape)
+           data = data.transpose((0, 1, 3, 2))
+           self.layer.depthwise_kernel.assign(data)
+       elif param_name == 'biases':
+           #shape = self.layer.bias.shape
+           #print('shape', shape)
+           #data = data.reshape(shape)
+           self.layer.bias.assign(data)
+       else:
+           raise ValueError('DW parameter not identified {}'.format(param_name))
         
 
 class BNParameter:

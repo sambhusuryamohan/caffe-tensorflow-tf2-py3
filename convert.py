@@ -67,7 +67,7 @@ def convert(def_path, caffemodel_path, data_output_path, code_output_path, stand
             if code_output_path is None:
                 print_stderr('Saving source...')
                 code_output_path = os.path.join(temp_folder, filename) + '.py'
-                with open(code_output_path, 'wb') as src_out:
+                with open(code_output_path, 'w') as src_out:
                     src_out.write(transformer.transform_source())
 
             checkpoint_path = os.path.join(temp_folder, filename + '.ckpt')

@@ -77,6 +77,14 @@ def shape_convolution(node):
 def shape_pool(node):
     return get_strided_kernel_output_shape(node, math.ceil)
 
+'''
+def shape_permute(node):
+    shape = node.output_shape
+    return TensorShape(*shape) 
+'''
+def shape_reshape(node):
+    shape = [int(value) for value in node.layer.parameters.shape.dim]
+    return tuple(shape)
 
 def shape_inner_product(node):
     input_shape = node.get_only_parent().output_shape

@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from .param_loader import ParamLoaderFactory
+import json
+import os
 
 DEFAULT_PADDING = 'SAME'
 
@@ -55,6 +57,9 @@ class Network(object):
         #    print('layer {} weights: {}'.format(i, layer.weights))
         self.model.save(saved_model_path)
         self.model.summary()
+        with open(os.path.join(saved_model_path, 'model.json'), 'w') as f:
+            json.dump(self.model.to_json(), f)
+        self.model.save_weights(os.path.join(saved_model_path, 'model_weights'))
 
 
     def setup(self):
@@ -77,7 +82,7 @@ class Network(object):
         data_dict = np.load(data_path, allow_pickle=True).item()
         for op_name in data_dict:
             layer = self.model.get_layer(name=op_name)
-            #print("##############{}############", op_name)
+            #print("##############{}############".format(op_name))
             for param_name, data in data_dict[op_name].items():
                 #print('caffe data', op_name, param_name, np.array(data))
                 try:
@@ -194,13 +199,12 @@ class Network(object):
 
     @layer
     def lrn(self, input, radius, alpha, beta, name, bias=1.0):
-        raise NotImplementedError("LRN not implemented")
-        return tf.nn.local_response_normalization(input,
+        return tf.keras.layers.Lambda(lambda xinput:tf.nn.local_response_normalization(xinput,
                                                   depth_radius=radius,
                                                   alpha=alpha,
                                                   beta=beta,
                                                   bias=bias,
-                                                  name=name)
+                                                  name=name))(input)
 
     @layer
     def concat(self, inputs, axis, name):
@@ -239,3 +243,13 @@ class Network(object):
     @layer
     def dropout(self, input, keep_prob, name):
         return tf.keras.layers.Dropout(keep_prob, name=name)(input)
+
+    '''
+    @layer
+    def permute(self, input, dim):
+        return tf.keras.layers.Permute(dim=axis, name=name)(input)
+    '''
+
+    @layer
+    def reshape(self, input, shape, name):
+        return tf.keras.layers.Reshape(target_shape=shape, name=name)(input)

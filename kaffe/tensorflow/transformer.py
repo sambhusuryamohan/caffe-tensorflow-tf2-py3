@@ -173,7 +173,7 @@ class TensorFlowMapper(NodeMapper):
         return TensorFlowNode('lrn', int(params.local_size / 2), alpha, params.beta)
 
     def map_concat(self, node):
-        axis = (2, 3, 1, 0)[node.parameters.axis]
+        axis = (0, 3, 1, 2)[node.parameters.axis]
         return TensorFlowNode('concat', axis)
 
     def map_dropout(self, node):
@@ -191,6 +191,28 @@ class TensorFlowMapper(NodeMapper):
             return TensorFlowNode(operations[op_code])
         except KeyError:
             raise KaffeError('Unknown elementwise operation: {}'.format(op_code))
+    '''
+    def map_permute(self, node):
+        return TensorFlowNode('permute', node.parameters.dim)
+    '''
+    def map_reshape(self, node):
+        shape = [int(value) for value in node.layer.parameters.shape.dim]
+        if shape[0] == 0:
+            shape = shape[1:]
+        parent_shape = node.parents[0].output_shape
+        total_size = parent_shape.height*parent_shape.width*parent_shape.channels
+        rem_size = 1
+        neg_idx = -1
+        for i in range(3):
+            if shape[i] == -1:
+                neg_idx = i
+            else:
+                rem_size *= shape[i]
+        if neg_idx != -1:
+            shape[neg_idx] = total_size//rem_size
+        shape = (shape[1], shape[2], shape[0])
+        print('shape resize', shape, node.parents[0].output_shape, node.output_shape)
+        return TensorFlowNode('reshape', shape)
 
     def commit(self, chains):
         return chains

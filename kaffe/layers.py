@@ -50,6 +50,8 @@ LAYER_DESCRIPTORS = {
     'WindowData': shape_not_implemented,
     'Threshold': shape_identity,
     'PReLU': shape_identity,
+    'Reshape': shape_reshape
+    #'Permute': shape_not_implemented,
 }
 
 LAYER_TYPES = LAYER_DESCRIPTORS.keys()
