@@ -238,6 +238,8 @@ class Network(object):
                 scale=True,
                 epsilon=1e-5,
                 name=name)(input)
+            if relu:
+                output = tf.keras.layers.ReLU(name=name+'/ReLU')(output)
             return output
 
     @layer
